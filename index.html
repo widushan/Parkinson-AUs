@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Parkinson Detection</title>
+  <style>
+    body { font-family: Arial; text-align: center; margin-top: 50px; }
+    #webcam { display: none; margin: 20px auto; }
+    #result { font-size: 1.5em; margin-top: 20px; }
+    .access-btn {
+      display: inline-flex; align-items: center; cursor: pointer; font-size: 1.2em;
+      background: #eee; border-radius: 8px; padding: 10px 20px; border: none;
+      transition: background 0.2s;
+    }
+    .access-btn:hover { background: #ddd; }
+    .plus-icon { font-size: 2em; margin-right: 10px; color: #007bff; }
+  </style>
+</head>
+<body>
+  <div style="margin-bottom: 20px;">
+    <label for="age">Age:</label>
+    <input type="number" id="age" min="1" max="120" style="width:60px;" required>
+    &nbsp;&nbsp;
+    <label for="gender">Gender:</label>
+    <select id="gender" required>
+      <option value="">Select</option>
+      <option value="1">Male</option>
+      <option value="0">Female</option>
+    </select>
+  </div>
+  <button class="access-btn" id="accessBtn" disabled>
+    <span class="plus-icon">+</span> Access to WebCam
+  </button>
+  <video id="webcam" width="320" height="240" autoplay></video>
+  <div id="result"></div>
+  <script>
+    const accessBtn = document.getElementById('accessBtn');
+    const webcam = document.getElementById('webcam');
+    const resultDiv = document.getElementById('result');
+    const ageInput = document.getElementById('age');
+    const genderSelect = document.getElementById('gender');
+    let stream, intervalId;
+    let userAge = null;
+    let userGender = null;
+
+    // Enable button only if both fields are filled
+    function checkInputs() {
+      userAge = ageInput.value;
+      userGender = genderSelect.value;
+      accessBtn.disabled = !(userAge && userGender !== "");
+    }
+    ageInput.addEventListener('input', checkInputs);
+    genderSelect.addEventListener('change', checkInputs);
+
+    accessBtn.onclick = async () => {
+      accessBtn.style.display = 'none';
+      ageInput.disabled = true;
+      genderSelect.disabled = true;
+      webcam.style.display = 'block';
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      webcam.srcObject = stream;
+      intervalId = setInterval(sendFrame, 1000); // every 1 second
+    };
+
+    async function sendFrame() {
+      if (webcam.readyState !== 4) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = webcam.videoWidth;
+      canvas.height = webcam.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      try {
+        const response = await fetch('http://127.0.0.1:5000/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataUrl, age: Number(userAge), gender: Number(userGender) })
+        });
+        const data = await response.json();
+        resultDiv.innerHTML = `Status: <b>${data.status}</b> (Probability: ${data.probability.toFixed(2)})`;
+      } catch (e) {
+        resultDiv.innerHTML = "Error connecting to backend.";
+      }
+    }
+  </script>
+</body>
+</html>
